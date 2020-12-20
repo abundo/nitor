@@ -68,7 +68,9 @@ Generate a key
 
 
 Edit file /etc/bind/named.conf.local
+
 Add the output from the above tsig-keygen command
+
 Add the zone statement, for the domain you want certificates
 
 Example content:
@@ -92,8 +94,7 @@ Restart bind
 
 Verify that dynamic dns updates works
 
-    nsupdate
-    > local 127.0.0.1
+    nsupdate -l
     > key hmac-sha256:acertmgr yVUWQkzIqk/jP6z3Ihxdqbsp+/671/DELI3l4DHKoT4=
     > update add test.int.example.com 100 A 1.2.3.4
     > send
@@ -136,6 +137,7 @@ Create directory for certificates
 
 
 Add domain names that should have get a certificates to /etc/acertmgr/domain.conf
+
 Each domain has two entries.
 
     ---
