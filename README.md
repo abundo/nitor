@@ -59,11 +59,13 @@ Create file /var/cache/bind/db.int.example.com with the below content
 
 Generate a key
 
-     tsig-keygen -a HMAC-SHA256 acertmgr
+    tsig-keygen -a HMAC-SHA256 acertmgr
 
 
 Edit file /etc/bind/named.conf.local
+
 Add the output from the above tsig-keygen command
+
 Add the zone statement, for the domain you want certificates
 
 Example content:
@@ -87,8 +89,7 @@ Restart bind
 
 Verify that dynamic dns updates works
 
-    nsupdate
-    > local 127.0.0.1
+    nsupdate -l
     > key hmac-sha256:acertmgr yVUWQkzIqk/jP6z3Ihxdqbsp+/671/DELI3l4DHKoT4=
     > update add test.int.example.com 100 A 1.2.3.4
     > send
@@ -98,8 +99,7 @@ If no errors are displayed, remove the entry again
     > update delete test.int.example.com A
     > send
 
-If the dynamic update of DNS does not work, you need to fix this before continuing
-with the installation
+If the dynamic update of DNS does not work, you need to fix this before continuing.
 
 
 Todo: Verify that delegation works
@@ -132,6 +132,7 @@ Create directory for certificates
 
 
 Add domain names that should have get a certificates to /etc/acertmgr/domain.conf
+
 Each domain has two entries.
 
     ---
@@ -151,7 +152,7 @@ Each domain has two entries.
       action: /opt/nitor/nitor.py apache2 --hostname docker.int.example.se --cert-src netbox.int.example.com.crt
 
 
-Create a bash script /etc/acertmgr/periodic.se
+Create a bash script /etc/acertmgr/periodic.sh
 
     #!/bin/bash
     systemctl start named.service
