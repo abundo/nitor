@@ -1,4 +1,4 @@
-= Nitor =
+# Nitor
 
 A tool that automatically checks out letsencrypt cerificates and install them
 in applications
@@ -10,61 +10,56 @@ If you have a domain name example.com. Create a subdomain and delegate this subd
 to the computer running this tool
 
 To avoid security issues, the nameserver on this machine is only running when requesting
-och renewing certificates.
+and renewing certificates.
 
 Note, if IPv6 is available, delegation using IPv6 is sufficient, no need to do any
 port forwarding or similar in the firewall.
 
+Developed and tested using Ubuntu 20.04
 
-= Installation and configuration =
 
+Installation and configuration
+======================================
 
-== install acertmgr ==
+## Nitor server
+
+### install acertmgr
 
     sudo apt install python3-pip
     sudo pip3 install acertmgr dnspython
 
 
-== install nitor ==
+### install nitor
 
     cd /opt
     git clone https://github.com/abundo/nitor.git
 
 
-== Install isc-bind ==
+### Install isc-bind
 
     apt install bind9
 
 
-== configure isc-bind ==
-
-=== Create a zonefile ===
+### Create a zonefile
 
 Create file /var/cache/bind/db.int.example.com with the below content
 
-    $ORIGIN .
     $TTL 30
-    int.example.com         IN SOA  localhost. support.example.com. (
+    @                       IN SOA  ns1.example.com. support.example.com. (
                                     1          ; serial
                                     604800     ; refresh (1 week)
                                     86400      ; retry (1 day)
                                     2419200    ; expire (4 weeks)
                                     30         ; minimum (30 seconds)
                                     )
-                            NS      ns1.example.com.
-
-    $ORIGIN int.example.com
-    ns1                     AAAA    2001:db8::1
+    @                        NS      ns1.example.com.
 
 
-Of course, replace 2001:db8::1 with the IPv6 address of the nitor server.
-
-
-=== Allow dynamic update on the zone ===
+### Allow dynamic update on the zone
 
 Generate a key
 
-     tsig-keygen -a HMAC-SHA256 int.example.com.
+     tsig-keygen -a HMAC-SHA256 acertmgr
 
 
 Edit file /etc/bind/named.conf.local
@@ -110,7 +105,8 @@ with the installation
 Todo: Verify that delegation works
 
 
-== configure acertmgr ==
+
+### configure acertmgr
 
 edit /etc/acertmgr/acertmgr.conf
 
@@ -125,7 +121,7 @@ edit /etc/acertmgr/acertmgr.conf
     nsupdate_server: localhost
     nsupdate_keyname: acertmgr
     nsupdate_keyvalue: yVUWQkzIqk/jP6z3Ihxdqbsp+/671/DELI3l4DHKoT4=
-    nsupdate_keyalgorithm: HMAC-SHA256.SIG-ALG.REG.INT
+    nsupdate_keyalgorithm: hmac-sha256
 
 
 note, nsupdate_keyname, keyvalue and keyalgorithm must match whats in named.conf.local
@@ -145,14 +141,14 @@ Each domain has two entries.
       group: root
       perm: '600'
       format: key
-      action: /opt/nitor/install-cert.py apache2 --hostname docker2.int.lowinger.se --cert-src /var/certs/netbox.int.example.com.key
+      action: /opt/nitor/nitor.py apache2 --hostname docker.int.example.se --cert-src netbox.int.example.com.key
 
     - path: /var/lib/nitor/netbox.int.example.com.crt
       user: root
       group: root
       perm: '600'
       format: crt,ca
-      action: /opt/nitor/install-cert.py apache2 --hostname docker2.int.lowinger.se --cert-src /var/lib/nito/netbox.int.example.com.crt
+      action: /opt/nitor/nitor.py apache2 --hostname docker.int.example.se --cert-src netbox.int.example.com.crt
 
 
 Create a bash script /etc/acertmgr/periodic.se
@@ -167,7 +163,7 @@ Create a bash script /etc/acertmgr/periodic.se
     systemctl stop named.service
 
 
-== configure cron, to periodically check and renew certs ==
+### Configure cron, to periodically check and renew certs
 
 Create file /etc/cron.d/nitor
 
@@ -177,62 +173,72 @@ Create file /etc/cron.d/nitor
     22 3 * * * root /opt/nitor/periodic.sh >/tmp/nitor.output
 
 
-== configure remote host ==
+### Setup ssh
 
-ssh to remote host
+Generate a ssh key for the remote hosts.
+
+When asking for password, just press enter (no password)
+
+    ssh-keygen -t rsa -b 4096 -f /root/.ssh/nitor
 
 
-=== Add user for cert management ===
+## Configure remote host
+
+This needs to be done on each host that needs certificates.
+
+
+### Remote host, add dedicated user for cert management
 
     sudo adduser nitor
 
+as name, add "User for nitor cert management" or similar.
 
-=== Create directory for certificates ===
+
+### Remote host, create directory for certificates
 
     sudo mkdir /etc/ssl/nitor
     sudo chown nitor /etc/ssl/nitor
 
 
-=== Grant permission to restart services when new cert is installed ==
+### Remote host, grant permission to reload services when new cert is installed
 
-    visudo
+Create a sudo file 
+
+    visudo -f /etc/sudoers.d/nitor
+
+ with the following content
+
+    nitor    ALL=NOPASSWD: /bin/systemctl reload apache2.service
 
 
-add this line at end
-
-    nitor    ALL=NOPASSWD: /bin/systemctl restart apache2.service
-
-
-== Finalize nitor setup ==
+## nitor server
  
-=== configure ssh, to allow passwordless login to remote host ===
-
-If not already done, generate a key for the remote host
-When asking for password, just press enter (no password)
-
-    ssh-keygen -t rsa -b 4096 -f .ssh/nitor
-
-
 Copy key to remote host
 
-    ssh-copy-id -i .ssh/nitor nitor@netbox.int.example.com
+    ssh-copy-id -i /root/.ssh/nitor nitor@netbox.int.example.com
 
 
 Verify that remote login without password works
 
-   ssh -i .ssh/nitor nitor@netbox.int.example.com
+    ssh -i /root/.ssh/nitor nitor@netbox.int.example.com
 
 
 Verify that apache2 can be reloaded, without password
 
-    sudo /bin/systemctl restart apache2.service
+    sudo /bin/systemctl reload apache2.service
 
 
-=== Checkout certificate and get it installed ===
+## nitor server, checkout certificate and get it installed
 
-sudo acertmgr
+    sudo acertmgr
 
 
-= Troubleshooting =
+# Troubleshooting
 
 Todo
+
+Error getting certificate
+
+Error installing certificate
+
+Error reloading application
